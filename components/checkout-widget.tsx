@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, Wallet, Loader2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { CheckCircle2, Wallet, Loader2, AlertCircle } from "lucide-react"
 import { VeloxLogo } from "./velox-logo"
 
 type WalletType = "freighter" | "ledger" | null
@@ -16,51 +17,77 @@ export function CheckoutWidget() {
   const [isComplete, setIsComplete] = useState(false)
   const [recurringEnabled, setRecurringEnabled] = useState(false)
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyType>("USDC")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [transactionId, setTransactionId] = useState("")
+  const [error, setError] = useState("")
 
   const handlePayment = async () => {
-    if (!selectedWallet) return
+    if (!selectedWallet || !name.trim() || !email.trim()) return
 
     setIsProcessing(true)
-    console.log("[v0] Iniciando pago con billetera:", selectedWallet)
-    console.log("[v0] Pagos recurrentes:", recurringEnabled)
-    console.log("[v0] Moneda seleccionada:", selectedCurrency)
+    setError("")
 
-    // Simulate wallet connection and payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      const response = await fetch("/api/payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          paymentMethod: selectedWallet,
+          currency: selectedCurrency,
+          amount: getPrice(),
+          recurring: recurringEnabled,
+        }),
+      })
 
-    console.log("[v0] Pago completado exitosamente")
-    setIsProcessing(false)
-    setIsComplete(true)
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Error al procesar el pago")
+      }
+
+      setTransactionId(data.transactionId)
+      setIsComplete(true)
+    } catch (err) {
+      console.error("[v0] Payment failed:", err)
+      setError(err instanceof Error ? err.message : "Error al procesar el pago")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleWalletSelect = (walletId: WalletType) => {
-    console.log("[v0] Billetera seleccionada:", walletId)
     setSelectedWallet(walletId)
   }
 
   const handleCurrencySelect = (currency: CurrencyType) => {
-    console.log("[v0] Moneda seleccionada:", currency)
     setSelectedCurrency(currency)
   }
 
   const getPrice = () => {
     if (selectedCurrency === "USDC") return "29.99"
-    // XLM conversión aproximada (1 USDC ≈ 9 XLM)
     return "269.91"
   }
 
   const wallets = [
-    { id: "freighter" as const, name: "Freighter", icon: "🚀" },
-    { id: "ledger" as const, name: "Ledger", icon: "🔐" },
+    { id: "freighter" as const, name: "Freighter", icon: "🚀", type: "crypto" },
+    { id: "ledger" as const, name: "Ledger", icon: "🔐", type: "crypto" },
   ]
 
   const handleReset = () => {
-    console.log("[v0] Reiniciando widget de pago")
     setIsComplete(false)
     setIsProcessing(false)
     setSelectedWallet(null)
     setRecurringEnabled(false)
     setSelectedCurrency("USDC")
+    setName("")
+    setEmail("")
+    setTransactionId("")
+    setError("")
   }
 
   return (
@@ -83,6 +110,35 @@ export function CheckoutWidget() {
         {!isComplete ? (
           <>
             <div className="space-y-4">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <label htmlFor="name" className="text-sm font-medium text-foreground">
+                    Nombre completo
+                  </label>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="Juan Pérez"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="bg-card border-border/50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-medium text-foreground">
+                    Correo electrónico
+                  </label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="juan@ejemplo.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="bg-card border-border/50"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Pagar con</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -94,6 +150,17 @@ export function CheckoutWidget() {
                         : "border-border/50 bg-card hover:border-primary/50"
                     }`}
                   >
+                    <svg className="h-6 w-6" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="16" cy="16" r="16" fill="#2775CA" />
+                      <path
+                        d="M20.5 16C20.5 13.79 19.21 12.5 17 12.5H14.5V19.5H17C19.21 19.5 20.5 18.21 20.5 16ZM17 10.5C20.31 10.5 22.5 12.69 22.5 16C22.5 19.31 20.31 21.5 17 21.5H14.5V24H12.5V8H17C17 8 17 10.5 17 10.5Z"
+                        fill="white"
+                      />
+                      <path
+                        d="M17.5 13.5C18.88 13.5 19.5 14.12 19.5 15.5V16.5C19.5 17.88 18.88 18.5 17.5 18.5H15.5V13.5H17.5Z"
+                        fill="white"
+                      />
+                    </svg>
                     <span className="font-semibold text-foreground">USDC</span>
                     {selectedCurrency === "USDC" && <CheckCircle2 className="h-4 w-4 text-primary" />}
                   </button>
@@ -105,6 +172,13 @@ export function CheckoutWidget() {
                         : "border-border/50 bg-card hover:border-primary/50"
                     }`}
                   >
+                    <svg className="h-6 w-6" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="16" cy="16" r="16" fill="#000000" />
+                      <path
+                        d="M8 24L13.5 16L8 8H11L16.5 16L11 24H8ZM16.5 16L22 8H25L19.5 16L25 24H22L16.5 16Z"
+                        fill="white"
+                      />
+                    </svg>
                     <span className="font-semibold text-foreground">XLM</span>
                     {selectedCurrency === "XLM" && <CheckCircle2 className="h-4 w-4 text-primary" />}
                   </button>
@@ -125,7 +199,7 @@ export function CheckoutWidget() {
               <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <Wallet className="h-4 w-4 text-primary" />
-                  Seleccionar Billetera
+                  Selecciona tu billetera
                 </label>
                 <div className="grid gap-2">
                   {wallets.map((wallet) => (
@@ -151,10 +225,7 @@ export function CheckoutWidget() {
                   type="checkbox"
                   id="recurring"
                   checked={recurringEnabled}
-                  onChange={(e) => {
-                    setRecurringEnabled(e.target.checked)
-                    console.log("[v0] Pagos recurrentes:", e.target.checked)
-                  }}
+                  onChange={(e) => setRecurringEnabled(e.target.checked)}
                   className="h-4 w-4 rounded border-border accent-primary"
                 />
                 <label htmlFor="recurring" className="text-sm text-muted-foreground cursor-pointer">
@@ -163,16 +234,23 @@ export function CheckoutWidget() {
               </div>
             </div>
 
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
             <Button
               onClick={handlePayment}
-              disabled={!selectedWallet || isProcessing}
+              disabled={!selectedWallet || isProcessing || !name.trim() || !email.trim()}
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
               size="lg"
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Procesando...
+                  Procesando pago...
                 </>
               ) : (
                 <>
@@ -188,11 +266,11 @@ export function CheckoutWidget() {
             </div>
             <div>
               <h3 className="text-xl font-semibold text-foreground">¡Pago Exitoso!</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Tu transacción ha sido confirmada en la red Stellar</p>
+              <p className="mt-2 text-sm text-muted-foreground">Tu transacción ha sido confirmada</p>
             </div>
             <div className="rounded-lg border border-border/50 bg-secondary/20 p-3">
               <p className="text-xs text-muted-foreground">ID de Transacción</p>
-              <p className="mt-1 font-mono text-sm text-foreground">0x742d...8f4a</p>
+              <p className="mt-1 font-mono text-xs break-all text-foreground">{transactionId}</p>
             </div>
             <Button onClick={handleReset} variant="outline" className="w-full border-border/50 bg-transparent">
               Hacer Otro Pago
